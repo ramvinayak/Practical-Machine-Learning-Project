@@ -1,0 +1,118 @@
+#### Quantified Self Predictive Modeling - Machine Learning 
+##### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+##### Objective 
+
+The objective of this project is to use the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+```{r echo=TRUE,message=FALSE,warning=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(RCurl)
+library(kernlab)
+```
+
+##### Data Loading 
+Loading the url for the training and testing data. 
+```{r, echo=TRUE}
+trainURL = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+
+Reading the training and testing data into the respective data frames 
+```{r,echo=TRUE}
+trainingFile <- getURL(trainURL)
+training <- read.csv(textConnection(trainingFile),na.strings=c("NA",""), header=T)
+testingFile <- getURL(testURL)
+testing <- read.csv(textConnection(testingFile),na.strings=c("NA",""), header=T)
+```
+##### Data Cleaning 
+The data contains many NAs. Removing the columns that contain NAs in both the training and testing set. 
+```{r echo=TRUE}
+training = training[,colSums(is.na(training)) == 0]
+testing = testing[,colSums(is.na(testing)) == 0]
+```
+
+Removing the variables with near zero variance.
+
+```{r echo=TRUE}
+nearzerovar = nearZeroVar(training, saveMetrics=TRUE)
+training = training[,nearzerovar$nzv==FALSE]
+nearzerovar = nearZeroVar(testing, saveMetrics=TRUE)
+testing = testing[,nearzerovar$nzv==FALSE]
+```
+
+Viewing the training set after removing the NAs and variables with near zero variance. 
+
+```{r echo=TRUE}
+str(training)
+```
+
+The idea of the project is to asses the quality of the exercise performed. The columns that specify username , time stamp and window data can be removed. 
+
+```{r echo=TRUE}
+training = training[,-c(1:6)]
+testing = testing[,-c(1:6)]
+```
+
+Data Partitioning for fitting Machine Learning Algorithm.
+
+```{r echo=TRUE}
+inTrain = createDataPartition(y=training$classe,p=0.7,list = FALSE)
+dataTrain = training[inTrain,]
+dataTest = training[-inTrain,]
+```
+
+Training the Machine Learning algorithm with classification tree model. Using K fold cross validation. setting the value of k to 5 to minimise the number of computations performed on the training set. 
+
+```{r echo=TRUE}
+train_control<- trainControl(method="cv", number=5)
+modelCART<- train(classe ~., data=dataTrain, trControl=train_control, method="rpart")
+```
+
+Predicting the out of sample error using the testing data and viewing the confusion Matrix.
+
+```{r echo=TRUE}
+modelPredict = predict(modelCART,newdata = dataTest)
+confMatCART = confusionMatrix(modelPredict,dataTest$classe)
+paste("Out of Sample Accuracy - CART Model",round(confMatCART$overall['Accuracy'],4))
+```
+
+##### CART Model Results  
+This is not a good prediction approach. Hence need to go in for a better algorithm. 
+
+##### Classification Tree 
+
+```{r echo=TRUE}
+modelClass = rpart(classe ~., data=dataTrain,method="class")
+prp(modelClass)
+```
+
+```{r echo=TRUE}
+predClass = predict(modelClass,newdata= dataTest,type = "class")
+confMatClass = confusionMatrix(predClass,dataTest$classe)
+paste("Out of Sample Accuracy - Classification Tree",round(confMatClass$overall['Accuracy'],4))
+```
+
+##### Random Forest 
+Fitting Random Forest Model and Calculating the out of sample accuracy 
+
+```{r echo=TRUE}
+modelRF = randomForest(classe ~., data=dataTrain)
+modelPredictRF = predict(modelRF,dataTest)
+confMatRF = confusionMatrix(modelPredictRF,dataTest$classe)
+paste("Out of Sample Accuracy - Random Forest",round(confMatRF$overall['Accuracy'],4))
+```
+
+Predicting the final results on the test set 
+
+```{r echo=TRUE}
+predict(modelRF,newdata= testing)
+```
+
+In the models fitted in the above analysis, Random Forest has performed better than the rest. 
+
